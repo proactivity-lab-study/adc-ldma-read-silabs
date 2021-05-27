@@ -17,6 +17,7 @@ CFLAGS                  += -Wall -std=c99
 CFLAGS                  += -ffunction-sections -fdata-sections -ffreestanding -fsingle-precision-constant -Wstrict-aliasing=0
 CFLAGS                  += -DconfigUSE_TICKLESS_IDLE=0
 CFLAGS                  += -D__START=main -D__STARTUP_CLEAR_BSS
+CFLAGS                  += -specs=nosys.specs
 CFLAGS                  += -DVTOR_START_LOCATION=$(APP_START)
 LDFLAGS                 += -nostartfiles -Wl,--gc-sections -Wl,--relax -Wl,-Map=$(@:.elf=.map),--cref -Wl,--wrap=atexit
 LDLIBS                  += -lgcc -lm
@@ -49,7 +50,7 @@ PROGRAM_DEST_ADDR       ?= $(APP_START)
 # distributed with this project and must be installed with Simplicity Studio.
 # The variable needs to point at the subdirectory with the version number, set
 # it in Makefile.private or through the environment.
-SILABS_SDKDIR           ?= $(HOME)/SimplicityStudio_v4/developer/sdks/gecko_sdk_suite/v2.7
+SILABS_SDKDIR           ?= $(HOME)/SimplicityStudio_v5/developer/sdks/gecko_sdk_suite/v3.1
 
 # Pull in the developer's private configuration overrides and settings
 -include Makefile.private
@@ -99,6 +100,8 @@ SOURCES += $(FREERTOS_PORT_SRC) $(FREERTOS_SRC)
 # CMSIS_CONFIG_DIR is used to add default CMSIS and FreeRTOS configs to INCLUDES
 CMSIS_CONFIG_DIR ?= $(ZOO)/thinnect.cmsis-freertos/$(MCU_ARCH)/config
 
+INCLUDES += -I$(ZOO)/thinnect.cmsis-ext
+
 # Silabs EMLIB, RAIL, radio
 INCLUDES += \
     -I$(SILABS_SDKDIR)/hardware/kit/common/drivers \
@@ -125,6 +128,7 @@ SOURCES += \
 # logging
 CFLAGS  += -DLOGGER_FWRITE
 SOURCES += $(NODE_PLATFORM_DIR)/silabs/logger_fwrite.c
+SOURCES += $(NODE_PLATFORM_DIR)/silabs/logger_fwrite_basic.c
 SOURCES += $(ZOO)/thinnect.lll/logging/loggers_ext.c
 INCLUDES += -I$(ZOO)/thinnect.lll/logging
 
@@ -142,6 +146,10 @@ SOURCES += $(ZOO)/lammertb.libcrc/src/crcccitt.c
 
 # platform stuff - watchdog, io etc...
 INCLUDES += -I$(NODE_PLATFORM_DIR)/include
+INCLUDES += -I$(NODE_PLATFORM_DIR)/include/silabs
+SOURCES += $(NODE_PLATFORM_DIR)/common/platform_mutex.c
+INCLUDES += -I$(NODE_PLATFORM_DIR)/widgets
+SOURCES += $(NODE_PLATFORM_DIR)/widgets/basic_rtos_logger_setup.c
 
 # ------------------------------------------------------------------------------
 

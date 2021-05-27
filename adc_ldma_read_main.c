@@ -37,8 +37,7 @@
 #include "SignatureArea.h"
 #include "DeviceSignature.h"
 
-#include "loggers_ext.h"
-#include "logger_fwrite.h"
+#include "basic_rtos_logger_setup.h"
 
 #include "loglevels.h"
 #define __MODUUL__ "main"
@@ -154,13 +153,6 @@ float calc_signal_energy()
     return energy;
 }
 
-int logger_fwrite_boot (const char *ptr, int len)
-{
-    fwrite(ptr, len, 1, stdout);
-    fflush(stdout);
-    return len;
-}
-
 int main ()
 {
     PLATFORM_Init();
@@ -172,8 +164,7 @@ int main ()
     PLATFORM_LedsInit();
 
     // Configure debug output
-    RETARGET_SerialInit();
-    log_init(BASE_LOG_LEVEL, &logger_fwrite_boot, NULL);
+    basic_noos_logger_setup();
 
     info1("ADC-LDMA-read "VERSION_STR" (%d.%d.%d)", VERSION_MAJOR, VERSION_MINOR, VERSION_PATCH);
 
@@ -186,9 +177,7 @@ int main ()
 
     if (osKernelReady == osKernelGetState())
     {
-        // Switch to a thread-safe logger
-        logger_fwrite_init();
-        log_init(BASE_LOG_LEVEL, &logger_fwrite, NULL);
+        basic_rtos_logger_setup();
 
         // Start the kernel
         osKernelStart();
