@@ -1,21 +1,13 @@
-# This is the main makefile for RadioCountToLeds firmware
+# This is the main makefile for ADC-LDMA-read firmware
 
 # _______________________ User overridable configuration _______________________
 
-PROJECT_NAME            ?= adcstream
+PROJECT_NAME            ?= adcldma
 
 VERSION_MAJOR           ?= 1
 VERSION_MINOR           ?= 0
 VERSION_PATCH           ?= 0
 VERSION_DEVEL           ?= "-dev"
-
-DEFAULT_RADIO_CHANNEL   ?= 13
-DEFAULT_RFPOWER_DBM		?= 21
-
-# Set device address at compile time for cases where a signature is not present
-DEFAULT_AM_ADDR         ?= 1
-# Set destination address at compile time
-DESTINATION_GATEWAY_ADDRESS ?= 0xFFFF
 
 # No bootloader, app starts at 0
 APP_START               = 0
@@ -57,7 +49,7 @@ PROGRAM_DEST_ADDR       ?= $(APP_START)
 # distributed with this project and must be installed with Simplicity Studio.
 # The variable needs to point at the subdirectory with the version number, set
 # it in Makefile.private or through the environment.
-SILABS_SDKDIR           ?= $(HOME)/SimplicityStudio_v4/developer/sdks/gecko_sdk_suite/v2.6
+SILABS_SDKDIR           ?= $(HOME)/SimplicityStudio_v4/developer/sdks/gecko_sdk_suite/v2.7
 
 # Pull in the developer's private configuration overrides and settings
 -include Makefile.private
@@ -84,12 +76,12 @@ NODE_PLATFORM_DIR       := $(ZOO)/thinnect.node-platform
 
 # ______________ Build components - sources and includes _______________________
 
-SOURCES += adcsnd_main.c
+SOURCES += adc_ldma_read_main.c
 
-# ADC_HANDLER, LDMACONFIG
+# ADC_HANDLER, LDMA_HANDLER
 SOURCES += \
-	adc_handler.c \
-	ldma_handler.c
+	adc_config.c \
+	ldma_config.c
 
 # FreeRTOS
 FREERTOS_DIR ?= $(ZOO)/FreeRTOS-Kernel
@@ -107,26 +99,14 @@ SOURCES += $(FREERTOS_PORT_SRC) $(FREERTOS_SRC)
 # CMSIS_CONFIG_DIR is used to add default CMSIS and FreeRTOS configs to INCLUDES
 CMSIS_CONFIG_DIR ?= $(ZOO)/thinnect.cmsis-freertos/$(MCU_ARCH)/config
 
-# MoteXML components
-MOTEXML_DIR ?= $(ZOO)/prolab.motexml
-DTTYPES_DIR ?= $(ZOO)/prolab.dt-types
-INCLUDES += -I$(MOTEXML_DIR)/lib -I$(DTTYPES_DIR)
-SOURCES += $(MOTEXML_DIR)/lib/MLE.c $(MOTEXML_DIR)/lib/MLD.c $(MOTEXML_DIR)/lib/MLI.c
-CFLAGS += -DLIBEXPORT=""
-
 # Silabs EMLIB, RAIL, radio
 INCLUDES += \
     -I$(SILABS_SDKDIR)/hardware/kit/common/drivers \
     -I$(SILABS_SDKDIR)/platform/halconfig/inc/hal-config \
-    -I$(SILABS_SDKDIR)/platform/emlib/inc \
-    -I$(SILABS_SDKDIR)/platform/emdrv/sleep/inc \
-    -I$(SILABS_SDKDIR)/platform/radio/rail_lib/hal \
-    -I$(SILABS_SDKDIR)/platform/radio/rail_lib/common \
-    -I$(SILABS_SDKDIR)/platform/radio/rail_lib/protocol/ieee802154 \
-    -I$(SILABS_SDKDIR)/platform/radio/rail_lib/plugin/pa-conversions
+    -I$(SILABS_SDKDIR)/platform/emlib/inc 
 
+# Sources for dependencies and Silabs libraries
 SOURCES += \
-    $(SILABS_SDKDIR)/util/silicon_labs/silabs_core/queue/circular_queue.c \
     $(SILABS_SDKDIR)/hardware/kit/common/drivers/retargetserial.c \
     $(SILABS_SDKDIR)/hardware/kit/common/drivers/retargetio.c \
     $(SILABS_SDKDIR)/platform/emlib/src/em_system.c \
@@ -135,21 +115,12 @@ SOURCES += \
     $(SILABS_SDKDIR)/platform/emlib/src/em_cmu.c \
     $(SILABS_SDKDIR)/platform/emlib/src/em_rmu.c \
     $(SILABS_SDKDIR)/platform/emlib/src/em_gpio.c \
-    $(SILABS_SDKDIR)/platform/emlib/src/em_i2c.c \
-    $(SILABS_SDKDIR)/platform/emlib/src/em_adc.c \
-    $(SILABS_SDKDIR)/platform/emlib/src/em_iadc.c \
-    $(SILABS_SDKDIR)/platform/emlib/src/em_ldma.c \
     $(SILABS_SDKDIR)/platform/emlib/src/em_usart.c \
     $(SILABS_SDKDIR)/platform/emlib/src/em_msc.c \
-    $(SILABS_SDKDIR)/platform/emlib/src/em_rtcc.c \
     $(SILABS_SDKDIR)/platform/emlib/src/em_timer.c \
-    $(SILABS_SDKDIR)/platform/emlib/src/em_wdog.c \
-    $(SILABS_SDKDIR)/platform/emlib/src/em_prs.c \
-    $(SILABS_SDKDIR)/platform/emdrv/sleep/src/sleep.c \
-    $(SILABS_SDKDIR)/platform/radio/rail_lib/hal/hal_common.c \
-    $(NODE_PLATFORM_DIR)/silabs/radio_rtos.c \
-    $(NODE_PLATFORM_DIR)/common/radio_seqNum.c \
-    $(NODE_PLATFORM_DIR)/common/sys_panic.c
+    $(SILABS_SDKDIR)/platform/emlib/src/em_adc.c \
+    $(SILABS_SDKDIR)/platform/emlib/src/em_ldma.c \
+    $(SILABS_SDKDIR)/platform/emlib/src/em_prs.c
 
 # logging
 CFLAGS  += -DLOGGER_FWRITE
@@ -169,13 +140,6 @@ INCLUDES += -I$(ZOO)/lammertb.libcrc/include \
             -I$(ZOO)/graphitemaster.incbin
 SOURCES += $(ZOO)/lammertb.libcrc/src/crcccitt.c
 
-# mistcomm
-INCLUDES += -I$(ZOO)/thinnect.mist-comm/include -I$(ZOO)/thinnect.mist-comm/include/compat
-SOURCES += $(wildcard $(ZOO)/thinnect.mist-comm/am/*.c) \
-           $(wildcard $(ZOO)/thinnect.mist-comm/api/*.c) \
-           $(wildcard $(ZOO)/thinnect.mist-comm/routing/*.c) \
-           $(wildcard $(ZOO)/thinnect.mist-comm/cmsis/*.c)
-
 # platform stuff - watchdog, io etc...
 INCLUDES += -I$(NODE_PLATFORM_DIR)/include
 
@@ -183,13 +147,6 @@ INCLUDES += -I$(NODE_PLATFORM_DIR)/include
 
 # Pull in the grunt work
 include $(BUILDSYSTEM_DIR)/Makerules
-# ------------------------------------------------------------------------------
-
-# Print some build parameters
-$(info DEFAULT_AM_ADDR=$(DEFAULT_AM_ADDR))
-$(info DEFAULT_RADIO_CHANNEL=$(DEFAULT_RADIO_CHANNEL))
-$(info DEFAULT_PAN_ID=$(DEFAULT_PAN_ID))
-$(info DEFAULT_RFPOWER_DBM=$(DEFAULT_RFPOWER_DBM))
 # ------------------------------------------------------------------------------
 
 $(call passVarToCpp,CFLAGS,VERSION_MAJOR)
@@ -200,10 +157,6 @@ $(call passVarToCpp,CFLAGS,SW_MAJOR_VERSION)
 $(call passVarToCpp,CFLAGS,SW_MINOR_VERSION)
 $(call passVarToCpp,CFLAGS,SW_PATCH_VERSION)
 $(call passVarToCpp,CFLAGS,IDENT_TIMESTAMP)
-
-$(call passVarToCpp,CFLAGS,DEFAULT_AM_ADDR)
-$(call passVarToCpp,CFLAGS,DEFAULT_RADIO_CHANNEL)
-$(call passVarToCpp,CFLAGS,DEFAULT_PAN_ID)
 
 UUID_APPLICATION_BYTES = $(call uuidToCstr,$(UUID_APPLICATION))
 $(call passVarToCpp,CFLAGS,UUID_APPLICATION_BYTES)
