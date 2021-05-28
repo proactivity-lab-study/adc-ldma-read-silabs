@@ -11,7 +11,7 @@
 #ifndef ADC_HANDLER_H_
 #define ADC_HANDLER_H_
 
-// ADC measuring channel location, datasheet p152.
+// ADC measuring channel location, see datasheet p202 (EFR32MG12 Gecko Multi-ProtocolWireless SoC Family Data Sheet).
 #define ADC_CHANNEL_LOC             adcPosSelAPORT4XCH9  // PA01 - microphone on tsb0 board
 
 // Number of ADC samples to measure.
@@ -37,8 +37,8 @@
 #define ADC_SCAN_DVL                4
 
 // Public functions
-void adc_init ();
-void adc_start_sampling (osThreadId_t thread_id, volatile uint16_t samples_buf[]);
+void adc_init (osThreadId_t thread_id, volatile uint16_t *samples_buf);
+void adc_start_sampling ();
 void adc_ldma_irq ();
 
 #endif // ADC_CONFIG_H_ 

@@ -79,11 +79,11 @@ void adc_loop ()
     ldma_init();
 
     // ADC initialisation, also creates LDMA descriptor linked list for ADC->memory transfer.
-    adc_init();
+    adc_init(adc_thread_id, adc_samples_buf);
 
     for (;;)
     {
-        adc_start_sampling(adc_thread_id, adc_samples_buf);
+        adc_start_sampling();
         info1("ADC started");
 
         // Wait for measurements.

@@ -43,12 +43,15 @@ void adc_ldma_irq()
     //? LDMA_StopTransfer(1 << MIC_ADC_DMA_CHANNEL);
 }
 
-void adc_init(void)
+void adc_init(osThreadId_t thread_id, volatile uint16_t *samples_buf)
 {
+    adc_thread_id = thread_id;
+    adc_samples_buf = samples_buf;
+
     // Enable clocks 
     CMU_ClockEnable(cmuClock_ADC0, true);
     CMU_ClockEnable(cmuClock_TIMER0, true);
-    CMU_ClockEnable(cmuClock_PRS, true);
+    //CMU_ClockEnable(cmuClock_PRS, true);
 
     // Configure DMA transfer from ADC to memory. 
     adc_ldma_setup();
@@ -67,10 +70,8 @@ void adc_init(void)
  * @param   samples_buf
  *          pointer to memory area where to store ADC measurements
  */
-void adc_start_sampling(osThreadId_t thread_id, volatile uint16_t samples_buf[])
+void adc_start_sampling()
 {
-    adc_thread_id = thread_id;
-    adc_samples_buf = samples_buf;
 
     // Start LDMA for ADC to memory transfer.
     ldma_adc_start(&desc_linked_list[0]);
@@ -107,7 +108,7 @@ static void adc_ldma_setup(void)
         desc_linked_list[i].xfer.dstAddrMode  = ldmaCtrlDstAddrModeAbs;
         desc_linked_list[i].xfer.srcAddr      = (uint32_t)(&ADC0->SCANDATA);
         // Increase the destination data pointer for 16 bit values.
-        desc_linked_list[i].xfer.dstAddr      = (uint32_t)(&adc_samples_buf) + i * DMA_MAX_TRANSFERS * 2;
+        desc_linked_list[i].xfer.dstAddr      = (uint32_t)(adc_samples_buf) + i * DMA_MAX_TRANSFERS * 2;
         desc_linked_list[i].xfer.linkMode     = ldmaLinkModeRel;
 
         // Number of transfers for this descriptor.
