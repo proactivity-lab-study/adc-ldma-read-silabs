@@ -130,7 +130,7 @@ float calc_signal_energy()
     #define ADCREFVOL 3.3f // Assuming ADC reference voltage is Vdd and that Vdd = 3.3 V. 
     #define ADCBITS12 4095 // Assuming 12 bit ADC conversion is used.
     
-    #warning "Assuming ADC ref. voltage is 3.3 V and ADC conversion is 16 bits"
+    #warning "Assuming ADC ref. voltage is 3.3 V and ADC conversion is 12 bits"
     
     static float energy;
     static uint32_t i;
