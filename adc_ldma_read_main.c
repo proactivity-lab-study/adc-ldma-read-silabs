@@ -78,11 +78,11 @@ void adc_loop ()
     ldma_init();
 
     // ADC initialisation, also creates LDMA descriptor linked list for ADC->memory transfer.
-    adc_init();
+    adc_init(adc_thread_id, adc_samples_buf);
 
     for (;;)
     {
-        adc_start_sampling(adc_thread_id, adc_samples_buf);
+        adc_start_sampling();
         info1("ADC started");
 
         // Wait for measurements.
@@ -129,7 +129,7 @@ float calc_signal_energy()
     #define ADCREFVOL 3.3f // Assuming ADC reference voltage is Vdd and that Vdd = 3.3 V. 
     #define ADCBITS12 4095 // Assuming 12 bit ADC conversion is used.
     
-    #warning "Assuming ADC ref. voltage is 3.3 V and ADC conversion is 16 bits"
+    #warning "Assuming ADC ref. voltage is 3.3 V and ADC conversion is 12 bits"
     
     static float energy;
     static uint32_t i;
