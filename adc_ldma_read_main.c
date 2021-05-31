@@ -74,6 +74,8 @@ void adc_loop ()
     #define TIME_DELAY_BETWEEN_MEASUREMENTS      2000U // OS ticks
     static float signal_energy;
 
+    basic_rtos_logger_setup();
+    
     // Initialise LDMA for ADC->memory data transfer.
     ldma_init();
 
@@ -177,8 +179,6 @@ int main ()
 
     if (osKernelReady == osKernelGetState())
     {
-        basic_rtos_logger_setup();
-
         // Start the kernel
         osKernelStart();
     }
