@@ -97,7 +97,7 @@ void adc_loop ()
         info1("Signal energy %lu", (uint32_t) signal_energy);
 
         // Wait a bit until next measurements.
-        osDelay(TIME_DELAY_BETWEEN_MEASUREMENTS);
+        //osDelay(TIME_DELAY_BETWEEN_MEASUREMENTS);
     }
 }
 
