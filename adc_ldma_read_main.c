@@ -184,7 +184,7 @@ static float mean_absolute_deviation(volatile uint16_t signal_buf[])
 
     for (i = 0; i < ADC_SAMPLES_PER_BATCH; i++)
     {
-        mad = signal_buf[i] - adc_bias; // Subtract bias
+        mad += abs(signal_buf[i] - adc_bias); // Subtract bias
     }
     mad = mad / ADC_SAMPLES_PER_BATCH;
 
