@@ -15,10 +15,10 @@
 #define ADC_CHANNEL_LOC             adcPosSelAPORT4XCH9  // PA01 - microphone on tsb0 board
 
 // Number of ADC samples to measure.
-#define ADC_SAMPLES_PER_BATCH       10240 	// 10240 - ~1 second of data @ 10kHz sampling speed
+#define ADC_SAMPLES_PER_BATCH       2500	// 10000 samples @ 10kHz  = 1 second of signal
 
 // Sampling rate
-#define ADC_SAMPLES_SEC             10000
+#define ADC_SAMPLES_SEC             5000
 
 // PRS and DMA channels used.
 #define ADC_PRS_CHANNEL             adcPRSSELCh0
@@ -27,11 +27,12 @@
 #define DMA_MAX_TRANSFERS           2048
 
 // Needed number of DMA descriptors.
-// #define MY_CEIL(x,y)             ((x) % (y) > 0 ? ((x) / (y) + 1) : ((X) / (y)))
-// #define NUM_DMA_DESC             MY_CEIL(ADC_SAMPLES_PER_BATCH, DMA_MAX_TRANSFERS)
-#define NUM_DMA_DESC                5
+#define MY_CEIL(x,y)             ((x) % (y) > 0 ? ((x) / (y) + 1) : ((x) / (y)))
+#define NUM_DMA_DESC             MY_CEIL(ADC_SAMPLES_PER_BATCH, DMA_MAX_TRANSFERS)
+//#define NUM_DMA_DESC 3
 
-#define ADC_THREAD_READ_DONE_FLAG   0x00000001U
+#define ADC_THREAD_READ_DONE_PING_FLAG   0x00000001U
+#define ADC_THREAD_READ_DONE_PONG_FLAG   0x00000002U
 
 // Number of samples in ADC FIFO when DMA is triggered (max. 4).
 #define ADC_SCAN_DVL                4

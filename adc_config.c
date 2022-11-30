@@ -16,7 +16,7 @@
 #include "ldma_config.h"
 
 // LDMA transfer descriptors
-static LDMA_Descriptor_t desc_linked_list[NUM_DMA_DESC];
+static LDMA_Descriptor_t desc_linked_list[NUM_DMA_DESC*2]; // *2 becaus ping-pong buffer
 
 static osThreadId_t adc_thread_id;
 static volatile uint16_t *adc_samples_buf;
@@ -32,15 +32,28 @@ static void adc_scan_setup ();
  */
 void adc_ldma_irq()
 {
-    // Stop timer and ADC
-    TIMER_Enable(TIMER0, false);
-
-    if (osThreadFlagsSet(adc_thread_id, ADC_THREAD_READ_DONE_FLAG) != osOK)
+    // There is no way to determine which buffer was filled, other than
+    // we keep track of ping and pong since beginning.
+    static volatile bool ping = true;
+    
+    if(ping)
     {
-        // Handle error
+        ping = false;
+        if (osThreadFlagsSet(adc_thread_id, ADC_THREAD_READ_DONE_PING_FLAG) != osOK)
+        {
+            // Handle error
+            // PLATFORM_LedsSet(PLATFORM_LedsGet()^4);
+        }
     }
-    //? LDMA_IntDisable(1 << MIC_ADC_DMA_CHANNEL);
-    //? LDMA_StopTransfer(1 << MIC_ADC_DMA_CHANNEL);
+    else
+    {
+        ping = true;
+        if (osThreadFlagsSet(adc_thread_id, ADC_THREAD_READ_DONE_PONG_FLAG) != osOK)
+        {
+            // Handle error
+            // PLATFORM_LedsSet(PLATFORM_LedsGet()^4);
+        }
+    }
 }
 
 void adc_init(osThreadId_t thread_id, volatile uint16_t *samples_buf)
@@ -82,17 +95,20 @@ void adc_start_sampling()
 
 /**
  * @brief Create a list of linked descriptors to handle all of adc_samples_buf.
+ *        Using ping-pong buffer scheme. First half of adc_samples_buf is ping,
+ *        second half is pong.
  */
 static void adc_ldma_setup(void)
 {
     static uint16_t i = 0;
 
     // Create needed number of linked descriptors for adc_samples_buf.
-    for (i = 0; i <= (NUM_DMA_DESC - 1); i++)
+    for (i = 0; i <= (NUM_DMA_DESC*2 - 1); i++)
     {
         desc_linked_list[i].xfer.structType   = ldmaCtrlStructTypeXfer;
         desc_linked_list[i].xfer.structReq    = 0;
         desc_linked_list[i].xfer.byteSwap     = 0;
+        desc_linked_list[i].xfer.xferCnt      = DMA_MAX_TRANSFERS - 1;
         // Block size is 4 because ADC FIFO has 4 samples.
         desc_linked_list[i].xfer.blockSize    = ldmaCtrlBlockSizeUnit4; 
         desc_linked_list[i].xfer.doneIfs      = 0;
@@ -107,34 +123,48 @@ static void adc_ldma_setup(void)
         desc_linked_list[i].xfer.srcAddrMode  = ldmaCtrlSrcAddrModeAbs;
         desc_linked_list[i].xfer.dstAddrMode  = ldmaCtrlDstAddrModeAbs;
         desc_linked_list[i].xfer.srcAddr      = (uint32_t)(&ADC0->SCANDATA);
-        // Increase the destination data pointer for 16 bit values.
-        desc_linked_list[i].xfer.dstAddr      = (uint32_t)(adc_samples_buf) + i * DMA_MAX_TRANSFERS * 2;
         desc_linked_list[i].xfer.linkMode     = ldmaLinkModeRel;
+        desc_linked_list[i].xfer.link         = 1;
 
-        // Number of transfers for this descriptor.
-        if ((NUM_DMA_DESC - 1) == i)
+        if (0 == i) // First descriptor of ping.
         {
-            // Last descriptor, will it be full or not? 
-            if (0 == (ADC_SAMPLES_PER_BATCH % DMA_MAX_TRANSFERS))
-            {
-                desc_linked_list[i].xfer.xferCnt = DMA_MAX_TRANSFERS - 1;
-            }
-            else desc_linked_list[i].xfer.xferCnt = (ADC_SAMPLES_PER_BATCH % DMA_MAX_TRANSFERS) - 1;
+            desc_linked_list[i].xfer.dstAddrMode    = ldmaCtrlDstAddrModeAbs;
+            desc_linked_list[i].xfer.dstAddr        = (uint32_t)adc_samples_buf; // Memory address
         }
-        else desc_linked_list[i].xfer.xferCnt = DMA_MAX_TRANSFERS - 1;
+        else if (NUM_DMA_DESC == i) // First descriptor of pong.
+        {
+            desc_linked_list[i].xfer.dstAddrMode    = ldmaCtrlDstAddrModeAbs;
+            desc_linked_list[i].xfer.dstAddr        = (uint32_t)(adc_samples_buf) + ADC_SAMPLES_PER_BATCH * 2; // Memory address
+        }
+        else // All the rest.
+        {
+            desc_linked_list[i].xfer.dstAddrMode    = ldmaCtrlDstAddrModeRel;
+            desc_linked_list[i].xfer.dstAddr        = 0; // Offset from source address of previous transfer.
+        }
 
-        // Interrupt should be set for last descriptor of adc_samples_buf.
-        if ((NUM_DMA_DESC - 1) == i) desc_linked_list[i].xfer.doneIfs = 1;
-
-        // Link this discriptor to the next one or don't if it is the last.
+        // Interrupt should be set for last descriptor of ping and pong buffers.
+        // Number of transfers for last descriptor might be less than 2048.
         if ((NUM_DMA_DESC - 1) == i)
         {
-            desc_linked_list[i].xfer.link         = 0;
-            desc_linked_list[i].xfer.linkAddr     = 0;
+            desc_linked_list[i].xfer.doneIfs  = 1;
+            if((ADC_SAMPLES_PER_BATCH % DMA_MAX_TRANSFERS) != 0)
+            desc_linked_list[i].xfer.xferCnt  = (ADC_SAMPLES_PER_BATCH % DMA_MAX_TRANSFERS) - 1;
+        }
+        if ((NUM_DMA_DESC*2 - 1) == i)
+        {
+            desc_linked_list[i].xfer.doneIfs  = 1;
+            if((ADC_SAMPLES_PER_BATCH % DMA_MAX_TRANSFERS) != 0)
+            desc_linked_list[i].xfer.xferCnt  = (ADC_SAMPLES_PER_BATCH % DMA_MAX_TRANSFERS) - 1;
+        }
+
+        // Link this discriptor to the next one or to beginning if it is the last.
+        if ((NUM_DMA_DESC*2 - 1) == i)
+        {
+            /*Points to first descriptor in list*/
+            desc_linked_list[i].xfer.linkAddr = -((NUM_DMA_DESC*2)-1) * 4;
         }
         else
         {
-            desc_linked_list[i].xfer.link         = 1;
             desc_linked_list[i].xfer.linkAddr     = (1) * 4;
         }
     }

@@ -53,10 +53,11 @@ INCBIN(Header, "header.bin");
 #include "ldma_config.h"
 
 // Buffer to hold ADC samples. 
-static volatile uint16_t adc_samples_buf[ADC_SAMPLES_PER_BATCH];
+static volatile uint16_t adc_samples_buf[ADC_SAMPLES_PER_BATCH * 2]; // *2 because using ping-pong buffer
 static osThreadId_t adc_thread_id;
 
-static float calc_signal_energy ();
+static float calc_signal_energy (volatile uint16_t signal_buf[]);
+static float mean_absolute_deviation (volatile uint16_t signal_buf[]);
 
 /**
  * @brief
@@ -72,32 +73,46 @@ static float calc_signal_energy ();
  */
 void adc_loop ()
 {
-    #define TIME_DELAY_BETWEEN_MEASUREMENTS      2000U // OS ticks
-    static float signal_energy;
-
+    static float signal_energy, mad;
+    static uint32_t wait_flags, ready_flag;
     // Initialise LDMA for ADC->memory data transfer.
     ldma_init();
 
     // ADC initialisation, also creates LDMA descriptor linked list for ADC->memory transfer.
     adc_init(adc_thread_id, adc_samples_buf);
 
+    wait_flags = ADC_THREAD_READ_DONE_PING_FLAG | ADC_THREAD_READ_DONE_PONG_FLAG;
+    
+    adc_start_sampling();
+    info1("ADC started");
+
     for (;;)
     {
-        adc_start_sampling();
-        info1("ADC started");
-
         // Wait for measurements.
-        osThreadFlagsClear(ADC_THREAD_READ_DONE_FLAG);
-        osThreadFlagsWait(ADC_THREAD_READ_DONE_FLAG, osFlagsWaitAny, osWaitForever);
-
-        info1("ADC stopped");
+        osThreadFlagsClear(wait_flags);
+        ready_flag = osThreadFlagsWait(wait_flags, osFlagsWaitAny, osWaitForever);
         
-        signal_energy = calc_signal_energy();
-
+        if(ready_flag == ADC_THREAD_READ_DONE_PING_FLAG)
+        {
+            // Analyse ping buffer
+            signal_energy = calc_signal_energy(adc_samples_buf);
+            mad = mean_absolute_deviation(adc_samples_buf);
+        }
+        else if(ready_flag == ADC_THREAD_READ_DONE_PONG_FLAG)
+        {
+            // Analyse pong buffer
+            signal_energy = calc_signal_energy((uint16_t*)(adc_samples_buf)+ADC_SAMPLES_PER_BATCH);
+            mad = mean_absolute_deviation((uint16_t*)(adc_samples_buf)+ADC_SAMPLES_PER_BATCH);
+        }
+        else
+        {
+            // Handle exception
+        }
+        
+        // TODO Do something with analysis result
+        PLATFORM_LedsSet(PLATFORM_LedsGet()^1);
         info1("Signal energy %lu", (uint32_t) signal_energy);
-
-        // Wait a bit until next measurements.
-        //osDelay(TIME_DELAY_BETWEEN_MEASUREMENTS);
+        info1("Mean abs deviation %lu", (uint32_t) mad);
     }
 }
 
@@ -125,7 +140,7 @@ void adc_loop ()
  *
  * @return Energy value.
  */
-float calc_signal_energy()
+static float calc_signal_energy(volatile uint16_t signal_buf[])
 {
     #define ADCREFVOL 3.3f // Assuming ADC reference voltage is Vdd and that Vdd = 3.3 V. 
     #define ADCBITS12 4095 // Assuming 12 bit ADC conversion is used.
@@ -140,18 +155,40 @@ float calc_signal_energy()
 
     for (i = 0; i < ADC_SAMPLES_PER_BATCH; i++)
     {
-        adc_bias += adc_samples_buf[i];
+        adc_bias += signal_buf[i];
     }
     adc_bias /= ADC_SAMPLES_PER_BATCH;
 
     for (i = 0; i < ADC_SAMPLES_PER_BATCH; i++)
     {
-        vol = (float)(adc_samples_buf[i] - adc_bias) / ADCBITS12; // Subtract bias and normalize.
+        vol = (float)(signal_buf[i] - adc_bias) / ADCBITS12; // Subtract bias and normalize.
         vol_energy += vol * vol;
     }
     energy = vol_energy * ADCREFVOL * ADCREFVOL; // Account for actual voltage.
 
     return energy;
+}
+
+static float mean_absolute_deviation(volatile uint16_t signal_buf[])
+{
+    static uint32_t i;
+    static float adc_bias, mad;
+    
+    adc_bias = mad = 0;
+
+    for (i = 0; i < ADC_SAMPLES_PER_BATCH; i++)
+    {
+        adc_bias += signal_buf[i];
+    }
+    adc_bias /= ADC_SAMPLES_PER_BATCH;
+
+    for (i = 0; i < ADC_SAMPLES_PER_BATCH; i++)
+    {
+        mad = signal_buf[i] - adc_bias; // Subtract bias
+    }
+    mad = mad / ADC_SAMPLES_PER_BATCH;
+
+    return mad;
 }
 
 int logger_fwrite_boot (const char *ptr, int len)
